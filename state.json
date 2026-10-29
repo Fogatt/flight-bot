@@ -1,5 +1,5 @@
 {
-  "cursor": 2,
+  "cursor": 4,
   "routes": {
     "BGO-GIG-2026-12-10-oneway": {
       "best_price": "8423",
@@ -13,6 +13,18 @@
       "departure": "2026-12-11",
       "latest_price": "12626"
     },
+    "BGO-GIG-2026-12-12-oneway": {
+      "best_price": "10231",
+      "currency": "NOK",
+      "departure": "2026-12-12",
+      "latest_price": "10231"
+    },
+    "BGO-GIG-2026-12-13-oneway": {
+      "best_price": "9872",
+      "currency": "NOK",
+      "departure": "2026-12-13",
+      "latest_price": "9872"
+    },
     "BGO-GRU-2026-12-10-oneway": {
       "best_price": "8900",
       "currency": "NOK",
@@ -24,6 +36,18 @@
       "currency": "NOK",
       "departure": "2026-12-11",
       "latest_price": "11629"
+    },
+    "BGO-GRU-2026-12-12-oneway": {
+      "best_price": "10465",
+      "currency": "NOK",
+      "departure": "2026-12-12",
+      "latest_price": "10465"
+    },
+    "BGO-GRU-2026-12-13-oneway": {
+      "best_price": "9692",
+      "currency": "NOK",
+      "departure": "2026-12-13",
+      "latest_price": "9692"
     }
   }
 }
