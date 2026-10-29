@@ -1,29 +1,33 @@
 # Flight fare bot
 
-Searches [Duffel](https://duffel.com) for every combination of origin airport, destination airport and date in `config.yaml`. When the cheapest fare is at or below your limit, it sends you a Telegram message. It doesn't resend the same price: you get a new message only when a fare drops below the last price it told you about.
+Checks Google Flights (via [SerpApi](https://serpapi.com/google-flights-api)) for fares from your origin airports to all your destination airports, and sends a Telegram message when the cheapest fare to an airport on a date is at or below your limit. You're only alerted again for the same route and date if the price drops further.
 
 ## Setup
 
-1. **Duffel token**: sign up at duffel.com and create an access token under *Developers → Access tokens*.
-   Test tokens (`duffel_test_…`) only return fake "Duffel Airways" flights. You need a live token for real fares.
+1. **SerpApi key**: sign up at [serpapi.com](https://serpapi.com/users/sign_up) (free plan: 250 searches/month) and copy your API key from the dashboard.
 2. **Telegram bot**:
    - Message [@BotFather](https://t.me/BotFather), send `/newbot`, and copy the token.
    - Send any message to your new bot.
    - Open `https://api.telegram.org/bot<TOKEN>/getUpdates` and copy `message.chat.id`.
-3. **GitHub**: push this folder to a new repo (a private one is fine). Then go to *Settings → Secrets and variables → Actions* and add these secrets:
-   `DUFFEL_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
-4. Edit `config.yaml`. Then open *Actions → Check flights → Run workflow* to test it. After that it runs every 6 hours.
+3. **GitHub secrets**: in this repo go to *Settings → Secrets and variables → Actions* and add
+   `SERPAPI_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
+4. Open *Actions → Check flights → Run workflow* to test it. After that it runs every 8 hours.
+
+## Search quota
+
+One SerpApi search covers every origin and destination airport for one date. `max_searches_per_run` in `config.yaml` limits how many dates each run checks; dates are checked in rotation, so all of them get covered over a few runs.
+
+With 13 dates, 3 runs a day and 2 searches per run, that's about 186 searches a month (each date checked about every 2 days). On a paid SerpApi plan, raise `max_searches_per_run` or remove it to check every date on every run.
 
 ## Running locally
 
 ```bash
 pip install -r requirements.txt
-export DUFFEL_TOKEN=duffel_test_...
+export SERPAPI_KEY=...
 python -m flight_bot.bot --dry-run   # prints alerts, sends nothing, saves no state
 ```
 
 ## Notes
 
-- Searches per run = origins × destinations × dates × stay lengths. Each search takes a few seconds.
-- `state.json` remembers the latest, best and last-alerted price for each route. The workflow commits it back to the repo after each run.
-- Duffel returns prices in the airline's selling currency (NOK, EUR, …). `alert.max_price` sets a limit per currency. Prices in a currency with no limit are logged but never trigger an alert.
+- `state.json` remembers the latest, best and last-alerted price for each route, plus which date to check next. The workflow commits it back to the repo after each run.
+- A [Duffel](https://duffel.com) provider is also included (`provider: duffel`, secret `DUFFEL_TOKEN`), but Duffel only gives live tokens to verified businesses.

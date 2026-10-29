@@ -11,32 +11,30 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
 from html import escape
-from itertools import product
 from pathlib import Path
 
 import yaml
 
-from .duffel import DuffelClient, DuffelError, Offer
+from .offers import Offer, ProviderError
 from .telegram import send_message
 
 
 @dataclass
-class Route:
-    origin: str
-    destination: str
+class Search:
     departure: date
     return_date: date | None
 
-    @property
-    def key(self) -> str:
-        ret = self.return_date.isoformat() if self.return_date else "oneway"
-        return f"{self.origin}-{self.destination}-{self.departure.isoformat()}-{ret}"
 
-    def label(self) -> str:
-        text = f"{self.origin} → {self.destination}, {self.departure:%a %d %b}"
-        if self.return_date:
-            text += f" ↩ {self.return_date:%a %d %b}"
-        return text
+def route_key(offer: Offer, search: Search) -> str:
+    ret = search.return_date.isoformat() if search.return_date else "oneway"
+    return f"{offer.origin}-{offer.destination}-{search.departure.isoformat()}-{ret}"
+
+
+def route_label(offer: Offer, search: Search) -> str:
+    text = f"{offer.origin} → {offer.destination}, {search.departure:%a %d %b}"
+    if search.return_date:
+        text += f" ↩ {search.return_date:%a %d %b}"
+    return text
 
 
 def load_config(path: Path) -> dict:
@@ -44,15 +42,16 @@ def load_config(path: Path) -> dict:
         return yaml.safe_load(f)
 
 
-def date_range(start: date, end: date) -> list[date]:
-    return [start + timedelta(days=i) for i in range((end - start).days + 1)]
+def to_date(value) -> date:
+    return value if isinstance(value, date) else date.fromisoformat(str(value))
 
 
-def build_routes(cfg: dict, today: date) -> list[Route]:
+def build_searches(cfg: dict, today: date) -> list[Search]:
     search = cfg["search"]
     dates_cfg = search["departure_dates"]
     if isinstance(dates_cfg, dict):
-        dates = date_range(to_date(dates_cfg["from"]), to_date(dates_cfg["to"]))
+        start, end = to_date(dates_cfg["from"]), to_date(dates_cfg["to"])
+        dates = [start + timedelta(days=i) for i in range((end - start).days + 1)]
     else:
         dates = [to_date(d) for d in dates_cfg]
     dates = [d for d in dates if d > today]
@@ -63,17 +62,22 @@ def build_routes(cfg: dict, today: date) -> list[Route]:
     elif isinstance(stays, int):
         stays = [stays]
 
-    routes = []
-    for origin, dest, dep, stay in product(search["origins"], search["destinations"], dates, stays):
-        if origin == dest:
-            continue
-        ret = dep + timedelta(days=stay) if stay is not None else None
-        routes.append(Route(origin.upper(), dest.upper(), dep, ret))
-    return routes
+    return [
+        Search(dep, dep + timedelta(days=stay) if stay is not None else None)
+        for dep in dates
+        for stay in stays
+    ]
 
 
-def to_date(value) -> date:
-    return value if isinstance(value, date) else date.fromisoformat(str(value))
+def pick_searches(searches: list[Search], state: dict, max_calls: int | None, calls_per_search: int) -> list[Search]:
+    """Take the next batch of searches in round-robin order, so a small API quota
+    still covers every date over several runs."""
+    if not searches or max_calls is None:
+        return searches
+    count = min(len(searches), max(1, max_calls // calls_per_search))
+    start = state.get("cursor", 0) % len(searches)
+    state["cursor"] = (start + count) % len(searches)
+    return [searches[(start + i) % len(searches)] for i in range(count)]
 
 
 def load_state(path: Path) -> dict:
@@ -84,7 +88,8 @@ def load_state(path: Path) -> dict:
 
 def save_state(path: Path, state: dict, today: date) -> None:
     # Drop routes whose departure date has passed.
-    state = {k: v for k, v in state.items() if date.fromisoformat(v["departure"]) > today}
+    routes = {k: v for k, v in state.get("routes", {}).items() if date.fromisoformat(v["departure"]) > today}
+    state = dict(state, routes=routes)
     path.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n")
 
 
@@ -105,57 +110,75 @@ def should_alert(price: Decimal, currency: str, alert_cfg: dict, prev: dict | No
     return last_alerted is None or price < Decimal(last_alerted)
 
 
-def format_alert(route: Route, offer: Offer, prev: dict | None) -> str:
-    lines = [f"✈️ <b>{escape(route.label())}</b>", f"<b>{offer.price} {offer.currency}</b> · {escape(offer.airline)}"]
+def format_alert(offer: Offer, search: Search, prev: dict | None) -> str:
+    lines = [
+        f"✈️ <b>{escape(route_label(offer, search))}</b>",
+        f"<b>{offer.price} {offer.currency}</b> · {escape(offer.airline)}",
+    ]
     if prev and prev.get("last_alerted_price"):
         lines[-1] += f" (was {prev['last_alerted_price']})"
     lines += [escape(leg) for leg in offer.itinerary]
+    if offer.link:
+        lines.append(f'<a href="{escape(offer.link)}">Open in Google Flights</a>')
     return "\n".join(lines)
 
 
-def run(cfg: dict, client: DuffelClient, state: dict, today: date, notify, pause: float = 1.0) -> dict:
-    search, alert_cfg = cfg["search"], cfg["alert"]
-    routes = build_routes(cfg, today)
-    print(f"Checking {len(routes)} route/date combinations…")
+def run(cfg: dict, client, state: dict, today: date, notify, pause: float = 1.0) -> dict:
+    search_cfg, alert_cfg = cfg["search"], cfg["alert"]
+    origins = [a.upper() for a in search_cfg["origins"]]
+    destinations = [a.upper() for a in search_cfg["destinations"]]
+    calls_per_search = 1 if client.multi_airport else len(origins) * len(destinations)
 
+    all_searches = build_searches(cfg, today)
+    searches = pick_searches(all_searches, state, search_cfg.get("max_searches_per_run"), calls_per_search)
+    print(f"Running {len(searches)} of {len(all_searches)} date searches "
+          f"({', '.join(origins)} → {', '.join(destinations)})…")
+
+    routes = state.setdefault("routes", {})
     alerts = []
-    for i, route in enumerate(routes):
+    for i, search in enumerate(searches):
         if i:
             time.sleep(pause)
         try:
             offers = client.search(
-                route.origin,
-                route.destination,
-                route.departure,
-                route.return_date,
-                adults=search.get("adults", 1),
-                cabin_class=search.get("cabin_class", "economy"),
-                max_connections=search.get("max_connections"),
+                origins,
+                destinations,
+                search.departure,
+                search.return_date,
+                adults=search_cfg.get("adults", 1),
+                cabin_class=search_cfg.get("cabin_class", "economy"),
+                max_connections=search_cfg.get("max_connections"),
             )
-        except (DuffelError, OSError) as e:
-            print(f"  {route.key}: error: {e}", file=sys.stderr)
+        except (ProviderError, OSError) as e:
+            print(f"  {search.departure}: error: {e}", file=sys.stderr)
             continue
 
-        if not offers:
-            print(f"  {route.key}: no offers")
-            continue
+        # Cheapest offer per origin/destination pair.
+        cheapest: dict[tuple[str, str], Offer] = {}
+        for offer in offers:
+            pair = (offer.origin, offer.destination)
+            if pair not in cheapest or offer.price < cheapest[pair].price:
+                cheapest[pair] = offer
+        if not cheapest:
+            print(f"  {search.departure}: no offers")
 
-        cheapest = min(offers, key=lambda o: o.price)
-        prev = state.get(route.key)
-        print(f"  {route.key}: {cheapest.price} {cheapest.currency} ({cheapest.airline})")
-        if cheapest.currency not in price_limits(alert_cfg):
-            print(f"    note: no max_price set for {cheapest.currency}; not compared")
+        for offer in sorted(cheapest.values(), key=lambda o: o.price):
+            key = route_key(offer, search)
+            prev = routes.get(key)
+            print(f"  {key}: {offer.price} {offer.currency} ({offer.airline})")
+            if offer.currency not in price_limits(alert_cfg):
+                print(f"    note: no max_price set for {offer.currency}; not compared")
 
-        entry = dict(prev or {}, departure=route.departure.isoformat())
-        entry["latest_price"] = str(cheapest.price)
-        entry["currency"] = cheapest.currency
-        if "best_price" not in entry or cheapest.price < Decimal(entry["best_price"]):
-            entry["best_price"] = str(cheapest.price)
+            entry = dict(prev or {}, departure=search.departure.isoformat())
+            entry["latest_price"] = str(offer.price)
+            entry["currency"] = offer.currency
+            if "best_price" not in entry or offer.price < Decimal(entry["best_price"]):
+                entry["best_price"] = str(offer.price)
 
-        if should_alert(cheapest.price, cheapest.currency, alert_cfg, prev):
-            alerts.append(format_alert(route, cheapest, prev))
-            entry["last_alerted_price"] = str(cheapest.price)
-        state[route.key] = entry
+            if should_alert(offer.price, offer.currency, alert_cfg, prev):
+                alerts.append(format_alert(offer, search, prev))
+                entry["last_alerted_price"] = str(offer.price)
+            routes[key] = entry
 
     if alerts:
         # Telegram messages are capped at 4096 chars, so send in chunks.
@@ -170,6 +193,19 @@ def run(cfg: dict, client: DuffelClient, state: dict, today: date, notify, pause
     return state
 
 
+def make_client(cfg: dict):
+    provider = cfg.get("provider", "serpapi")
+    if provider == "serpapi":
+        from .serpapi import SerpApiClient
+
+        return SerpApiClient(os.environ["SERPAPI_KEY"], currency=cfg["alert"].get("currency", "NOK"))
+    if provider == "duffel":
+        from .duffel import DuffelClient
+
+        return DuffelClient(os.environ["DUFFEL_TOKEN"])
+    raise SystemExit(f"Unknown provider: {provider}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default="config.yaml", type=Path)
@@ -178,7 +214,7 @@ def main() -> None:
     args = parser.parse_args()
 
     cfg = load_config(args.config)
-    client = DuffelClient(os.environ["DUFFEL_TOKEN"])
+    client = make_client(cfg)
     today = date.today()
 
     if args.dry_run:
