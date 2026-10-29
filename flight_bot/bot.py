@@ -111,9 +111,9 @@ def should_alert(price: Decimal, currency: str, alert_cfg: dict, prev: dict | No
     return last_alerted is None or price < Decimal(last_alerted)
 
 
-def format_alert(offer: Offer, search: Search, prev: dict | None) -> str:
+def format_alert(offer: Offer, search: Search, prev: dict | None, source: str) -> str:
     lines = [
-        f"✈️ <b>{escape(route_label(offer, search))}</b>",
+        f"✈️ <b>{escape(route_label(offer, search))}</b> · <i>{escape(source)}</i>",
         f"<b>{offer.price} {offer.currency}</b> · {escape(offer.airline)}",
     ]
     if prev and prev.get("last_alerted_price"):
@@ -183,7 +183,7 @@ def run(
                 entry["best_price"] = str(offer.price)
 
             if should_alert(offer.price, offer.currency, alert_cfg, prev):
-                alerts.append(format_alert(offer, search, prev))
+                alerts.append(format_alert(offer, search, prev, source_name(cfg)))
                 entry["last_alerted_price"] = str(offer.price)
             routes[key] = entry
 
@@ -212,7 +212,7 @@ def format_status(
 ) -> str:
     """Short summary sent after every run so you know the bot is alive."""
     dates = ", ".join(f"{s.departure:%d %b}" for s in searches) or "none"
-    lines = ["✅ <b>Flight bot ran</b>", f"Checked departures: {dates}"]
+    lines = [f"✅ <b>Flight bot ran</b> · <i>{escape(source_name(cfg))}</i>", f"Checked departures: {dates}"]
     if found:
         offer, search = min(found, key=lambda f: f[0].price)
         lines.append(
@@ -224,8 +224,9 @@ def format_status(
     lines.append(f"Alerts sent: {alerts}" + (f" · Failed searches: {errors}" if errors else ""))
     if next_run:
         tz = ZoneInfo(cfg.get("timezone", "Europe/Oslo"))
-        hours = (next_run - datetime.now(timezone.utc)).total_seconds() / 3600
-        lines.append(f"Next check in ~{hours:.0f} h, around {next_run.astimezone(tz):%a %d %b %H:%M}")
+        minutes = (next_run - datetime.now(timezone.utc)).total_seconds() / 60
+        wait = f"{minutes:.0f} min" if minutes < 120 else f"{minutes / 60:.0f} h"
+        lines.append(f"Next check in ~{wait}, around {next_run.astimezone(tz):%a %d %b %H:%M}")
     return "\n".join(lines)
 
 
@@ -252,15 +253,8 @@ def next_cron_run(cron: str, now: datetime) -> datetime | None:
     return None
 
 
-def scheduled_cron(workflow: Path) -> str | None:
-    try:
-        triggers = yaml.safe_load(workflow.read_text())
-    except (OSError, yaml.YAMLError):
-        return None
-    # PyYAML reads the bare key `on:` as boolean True.
-    on = triggers.get("on", triggers.get(True)) or {}
-    schedule = on.get("schedule") if isinstance(on, dict) else None
-    return schedule[0].get("cron") if schedule else None
+def source_name(cfg: dict) -> str:
+    return cfg.get("name") or cfg.get("provider", "serpapi")
 
 
 def make_client(cfg: dict):
@@ -269,6 +263,10 @@ def make_client(cfg: dict):
         from .serpapi import SerpApiClient
 
         return SerpApiClient(os.environ["SERPAPI_KEY"], currency=cfg["alert"].get("currency", "NOK"))
+    if provider == "fastflights":
+        from .fastflights import FastFlightsClient
+
+        return FastFlightsClient(currency=cfg["alert"].get("currency", "NOK"))
     if provider == "duffel":
         from .duffel import DuffelClient
 
@@ -276,29 +274,54 @@ def make_client(cfg: dict):
     raise SystemExit(f"Unknown provider: {provider}")
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", default="config.yaml", type=Path)
-    parser.add_argument("--state", default="state.json", type=Path)
-    parser.add_argument("--dry-run", action="store_true", help="print alerts instead of sending, don't save state")
-    args = parser.parse_args()
-
-    cfg = load_config(args.config)
+def run_config(path: Path, dry_run: bool) -> None:
+    cfg = load_config(path)
+    state_path = Path(cfg.get("state_file", "state.json"))
+    print(f"=== {source_name(cfg)} ({path}) ===")
     client = make_client(cfg)
     today = date.today()
 
-    if args.dry_run:
-        notify = lambda text: print("\n--- alert ---\n" + text)
+    if dry_run:
+        notify = lambda text: print("\n--- telegram ---\n" + text)
     else:
         token, chat_id = os.environ["TELEGRAM_BOT_TOKEN"], os.environ["TELEGRAM_CHAT_ID"]
         notify = lambda text: send_message(token, chat_id, text)
 
-    cron = scheduled_cron(Path(".github/workflows/check-flights.yml"))
+    cron = cfg.get("schedule")
     next_run = next_cron_run(cron, datetime.now(timezone.utc)) if cron else None
+    state = run(cfg, client, load_state(state_path), today, notify, next_run=next_run)
+    if not dry_run:
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        save_state(state_path, state, today)
 
-    state = run(cfg, client, load_state(args.state), today, notify, next_run=next_run)
-    if not args.dry_run:
-        save_state(args.state, state, today)
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--config", action="append", type=Path, help="config file to run (repeatable; default: every file in configs/)"
+    )
+    parser.add_argument(
+        "--schedule", default="", help="only run configs whose `schedule` equals this cron (used by GitHub Actions)"
+    )
+    parser.add_argument("--dry-run", action="store_true", help="print messages instead of sending, don't save state")
+    args = parser.parse_args()
+
+    paths = args.config or sorted(Path("configs").glob("*.yaml"))
+    if args.schedule:
+        paths = [p for p in paths if load_config(p).get("schedule") == args.schedule]
+        if not paths:
+            raise SystemExit(f"No config in configs/ has schedule {args.schedule!r}")
+
+    failed = []
+    for path in paths:
+        try:
+            run_config(path, args.dry_run)
+        except Exception as e:
+            # Keep going so one broken source doesn't stop the others.
+            print(f"{path}: {type(e).__name__}: {e}", file=sys.stderr)
+            failed.append(path)
+    if failed:
+        raise SystemExit(f"Failed: {', '.join(map(str, failed))}")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,40 @@
+# fast-flights: unofficial Google Flights scraper (faster-flights library). No key, no quota,
+# but it can break when Google changes its pages or blocks requests.
+name: fast-flights
+provider: fastflights
+schedule: "47 * * * *"         # every hour (UTC); must match a cron in .github/workflows/check-flights.yml
+state_file: state/fastflights.json
+
+search:
+  origins: [BGO]               # Bergen
+  destinations:
+    - GRU                      # São Paulo Guarulhos
+    - GIG                      # Rio de Janeiro Galeão
+    - VCP                      # Campinas Viracopos
+    - FOR                      # Fortaleza
+    - REC                      # Recife
+    - SSA                      # Salvador
+    - BSB                      # Brasília
+    - CNF                      # Belo Horizonte Confins
+    - POA                      # Porto Alegre
+  departure_dates:
+    from: 2026-12-10
+    to: 2026-12-22
+
+  return_after_days: null      # one-way
+
+  adults: 1
+  cabin_class: economy         # economy | premium_economy | business | first
+  max_connections: 1           # 0 = direct only
+
+  # Requests to Google per run. Each date needs one request per airport (9 here),
+  # so 45 = 5 dates per run; all 13 dates get checked about every 3 hours.
+  # Kept modest so Google is less likely to block us. Remove to check every date every hour.
+  max_searches_per_run: 45
+
+alert:
+  currency: NOK
+  max_price: 8000
+
+status_message: true
+timezone: Europe/Oslo

@@ -1,5 +1,8 @@
-# Fare source: "serpapi" (Google Flights, free for individuals) or "duffel" (needs a business account).
+# SerpApi: official Google Flights API, free plan = 250 searches/month.
+name: SerpApi
 provider: serpapi
+schedule: "17 */8 * * *"       # every 8 hours (UTC); must match a cron in .github/workflows/check-flights.yml
+state_file: state/serpapi.json
 
 search:
   origins: [BGO]               # Bergen
@@ -28,15 +31,14 @@ search:
   max_connections: 1           # 0 = direct only
 
   # API calls per run. With SerpApi one call covers all airports for one date.
-  # Free plan = 250/month; 3 runs/day x 2 = ~186/month, leaving room for manual runs.
+  # 3 runs/day x 2 = ~186/month, leaving room for manual runs.
   # Dates are checked in rotation, so each date is checked about every 2 days.
-  # Remove this line to check every date on every run.
   max_searches_per_run: 2
 
 alert:
-  currency: NOK                # SerpApi returns all prices in this currency
+  currency: NOK
   max_price: 8000              # alert when the cheapest fare is at or below this
 
 # Send a short "bot ran" summary to Telegram after every run, with the time of the next check.
 status_message: true
-timezone: Europe/Oslo          # for the next-check time in the status message
+timezone: Europe/Oslo

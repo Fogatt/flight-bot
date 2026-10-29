@@ -8,7 +8,6 @@ from flight_bot.bot import (
     pick_searches,
     run,
     save_state,
-    scheduled_cron,
     should_alert,
 )
 from flight_bot.duffel import parse_offer
@@ -155,12 +154,12 @@ def test_run_alerts_cheapest_once_then_only_on_drop(tmp_path):
 
 def test_status_message_after_run():
     sent = []
-    cfg = dict(CFG, status_message=True)
+    cfg = dict(CFG, status_message=True, name="fast-flights")
     client = FakeClient({"GRU": ["9100"], "GIG": ["8700"]})
     next_run = datetime(2026, 10, 29, 16, 17, tzinfo=timezone.utc)
     run(cfg, client, {}, TODAY, sent.append, pause=0, next_run=next_run)
     assert len(sent) == 1  # no fare under the limit, so only the status message
-    assert "Flight bot ran" in sent[0]
+    assert "Flight bot ran</b> · <i>fast-flights</i>" in sent[0]
     assert "Checked departures: 15 Dec, 16 Dec" in sent[0]
     assert "<b>8700 NOK</b> BGO → GIG on 15 Dec" in sent[0]
     assert "Thu 29 Oct 17:17" in sent[0]  # Oslo time (UTC+1)
@@ -176,6 +175,35 @@ def test_next_cron_run():
     assert next_cron_run("0 9 * * 1-5", now) is None
 
 
-def test_scheduled_cron_reads_workflow():
-    workflow = Path(__file__).parent.parent / ".github/workflows/check-flights.yml"
-    assert scheduled_cron(workflow) == "17 */8 * * *"
+def test_every_config_schedule_has_a_workflow_cron():
+    import yaml
+
+    root = Path(__file__).parent.parent
+    workflow = yaml.safe_load((root / ".github/workflows/check-flights.yml").read_text())
+    crons = {c["cron"] for c in workflow[True]["schedule"]}  # PyYAML reads `on:` as True
+    configs = [yaml.safe_load(p.read_text()) for p in sorted((root / "configs").glob("*.yaml"))]
+    assert {c["provider"] for c in configs} == {"serpapi", "fastflights"}
+    assert {c["schedule"] for c in configs} == crons
+    assert len({c["state_file"] for c in configs}) == len(configs)  # separate state per bot
+
+
+def test_parse_fastflights_result():
+    from fast_flights.model import Airport, CarbonEmission, Flights, SimpleDatetime, SingleFlight
+
+    from flight_bot.fastflights import parse_result
+
+    def seg(a, b, dep, arr):
+        return SingleFlight(
+            from_airport=Airport(a, a), to_airport=Airport(b, b),
+            departure=SimpleDatetime((2026, 12, 15), dep), arrival=SimpleDatetime((2026, 12, 15), arr),
+            duration=100, plane_type="",
+        )
+
+    result = Flights(
+        type="BGO", price=7420, airlines=["KLM"],
+        flights=[seg("BGO", "AMS", (6,), (8, 5)), seg("AMS", "GIG", (10, 30), (19,))],
+        carbon=CarbonEmission(0, 0),
+    )
+    offer = parse_result(result, "NOK", "https://example")
+    assert (offer.origin, offer.destination, offer.price) == ("BGO", "GIG", Decimal("7420"))
+    assert offer.itinerary == ["BGO 2026-12-15 06:00 -> GIG 19:00 (1 stop, via AMS)"]
