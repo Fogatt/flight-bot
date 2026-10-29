@@ -160,8 +160,8 @@ def test_status_message_after_run():
     run(cfg, client, {}, TODAY, sent.append, pause=0, next_run=next_run)
     assert len(sent) == 1  # no fare under the limit, so only the status message
     assert "Flight bot ran</b> · <i>fast-flights</i>" in sent[0]
-    assert "Checked departures: 15 Dec, 16 Dec" in sent[0]
-    assert "<b>8700 NOK</b> BGO → GIG on 15 Dec" in sent[0]
+    assert "Tue 15 Dec: <b>8700 NOK</b> BGO → GIG (Test Air)" in sent[0]
+    assert "Wed 16 Dec: <b>8700 NOK</b> BGO → GIG" in sent[0]
     assert "Thu 29 Oct 17:17" in sent[0]  # Oslo time (UTC+1)
 
 
@@ -207,3 +207,23 @@ def test_parse_fastflights_result():
     offer = parse_result(result, "NOK", "https://example")
     assert (offer.origin, offer.destination, offer.price) == ("BGO", "GIG", Decimal("7420"))
     assert offer.itinerary == ["BGO 2026-12-15 06:00 -> GIG 19:00 (1 stop, via AMS)"]
+
+
+def test_dates_per_message_splits_status_into_parts():
+    sent = []
+    cfg = dict(
+        CFG,
+        status_message=True,
+        dates_per_message=5,
+        search=dict(CFG["search"], departure_dates={"from": "2026-12-10", "to": "2026-12-21"}),  # 12 dates
+    )
+    client = FakeClient({"GRU": ["7900"]})  # under the limit: one alert per date
+    next_run = datetime(2026, 10, 29, 16, 17, tzinfo=timezone.utc)
+    run(cfg, client, {}, TODAY, sent.append, pause=0, next_run=next_run)
+
+    status = [m for m in sent if "Flight bot ran" in m]
+    assert [m.split("\n")[0].split(" · ")[-1] for m in status] == ["part 1/3", "part 2/3", "part 3/3"]
+    assert [m.count(" Dec: ") for m in status] == [5, 5, 2]
+    assert ["Next check" in m for m in status] == [False, False, True]
+    # Each part's alerts are sent just before its status message.
+    assert [m.count("✈️") for m in sent if "✈️" in m] == [5, 5, 2]

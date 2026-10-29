@@ -27,14 +27,14 @@ search:
   cabin_class: economy         # economy | premium_economy | business | first
   max_connections: 1           # 0 = direct only
 
-  # Requests to Google per run. Each date needs one request per airport (9 here),
-  # so 45 = 5 dates per run; all 13 dates get checked about every 3 hours.
-  # Kept modest so Google is less likely to block us. Remove to check every date every hour.
-  max_searches_per_run: 45
+  # No max_searches_per_run: every date is checked on every run.
+  # (Each date is one request per airport, so 13 dates x 9 airports = 117 requests/hour.
+  #  If Google starts blocking, add e.g. `max_searches_per_run: 45` to check 5 dates per run.)
 
 alert:
   currency: NOK
   max_price: 8000
 
 status_message: true
+dates_per_message: 5           # one status message per 5 dates (13 dates = 3 messages per run)
 timezone: Europe/Oslo

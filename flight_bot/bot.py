@@ -137,68 +137,79 @@ def run(
     print(f"Running {len(searches)} of {len(all_searches)} date searches "
           f"({', '.join(origins)} → {', '.join(destinations)})…")
 
+    # Optionally split the run into groups of dates, with one Telegram message per group.
+    per_message = cfg.get("dates_per_message") or len(searches) or 1
+    batches = [searches[i : i + per_message] for i in range(0, len(searches), per_message)] or [[]]
+
     routes = state.setdefault("routes", {})
-    alerts = []
-    found: list[tuple[Offer, Search]] = []
-    errors = 0
-    for i, search in enumerate(searches):
-        if i:
-            time.sleep(pause)
-        try:
-            offers = client.search(
-                origins,
-                destinations,
-                search.departure,
-                search.return_date,
-                adults=search_cfg.get("adults", 1),
-                cabin_class=search_cfg.get("cabin_class", "economy"),
-                max_connections=search_cfg.get("max_connections"),
-            )
-        except (ProviderError, OSError) as e:
-            print(f"  {search.departure}: error: {e}", file=sys.stderr)
-            errors += 1
-            continue
+    total_alerts = searched = 0
+    for part, batch in enumerate(batches, 1):
+        alerts = []
+        found: list[tuple[Offer, Search]] = []
+        errors = 0
+        for search in batch:
+            if searched:
+                time.sleep(pause)
+            searched += 1
+            try:
+                offers = client.search(
+                    origins,
+                    destinations,
+                    search.departure,
+                    search.return_date,
+                    adults=search_cfg.get("adults", 1),
+                    cabin_class=search_cfg.get("cabin_class", "economy"),
+                    max_connections=search_cfg.get("max_connections"),
+                )
+            except (ProviderError, OSError) as e:
+                print(f"  {search.departure}: error: {e}", file=sys.stderr)
+                errors += 1
+                continue
 
-        # Cheapest offer per origin/destination pair.
-        cheapest: dict[tuple[str, str], Offer] = {}
-        for offer in offers:
-            pair = (offer.origin, offer.destination)
-            if pair not in cheapest or offer.price < cheapest[pair].price:
-                cheapest[pair] = offer
-        if not cheapest:
-            print(f"  {search.departure}: no offers")
+            # Cheapest offer per origin/destination pair.
+            cheapest: dict[tuple[str, str], Offer] = {}
+            for offer in offers:
+                pair = (offer.origin, offer.destination)
+                if pair not in cheapest or offer.price < cheapest[pair].price:
+                    cheapest[pair] = offer
+            if not cheapest:
+                print(f"  {search.departure}: no offers")
 
-        for offer in sorted(cheapest.values(), key=lambda o: o.price):
-            found.append((offer, search))
-            key = route_key(offer, search)
-            prev = routes.get(key)
-            print(f"  {key}: {offer.price} {offer.currency} ({offer.airline})")
-            if offer.currency not in price_limits(alert_cfg):
-                print(f"    note: no max_price set for {offer.currency}; not compared")
+            for offer in sorted(cheapest.values(), key=lambda o: o.price):
+                found.append((offer, search))
+                key = route_key(offer, search)
+                prev = routes.get(key)
+                print(f"  {key}: {offer.price} {offer.currency} ({offer.airline})")
+                if offer.currency not in price_limits(alert_cfg):
+                    print(f"    note: no max_price set for {offer.currency}; not compared")
 
-            entry = dict(prev or {}, departure=search.departure.isoformat())
-            entry["latest_price"] = str(offer.price)
-            entry["currency"] = offer.currency
-            if "best_price" not in entry or offer.price < Decimal(entry["best_price"]):
-                entry["best_price"] = str(offer.price)
+                entry = dict(prev or {}, departure=search.departure.isoformat())
+                entry["latest_price"] = str(offer.price)
+                entry["currency"] = offer.currency
+                if "best_price" not in entry or offer.price < Decimal(entry["best_price"]):
+                    entry["best_price"] = str(offer.price)
 
-            if should_alert(offer.price, offer.currency, alert_cfg, prev):
-                alerts.append(format_alert(offer, search, prev, source_name(cfg)))
-                entry["last_alerted_price"] = str(offer.price)
-            routes[key] = entry
+                if should_alert(offer.price, offer.currency, alert_cfg, prev):
+                    alerts.append(format_alert(offer, search, prev, source_name(cfg)))
+                    entry["last_alerted_price"] = str(offer.price)
+                routes[key] = entry
 
-    if alerts:
-        # Telegram messages are capped at 4096 chars, so send in chunks.
-        chunk = ""
-        for a in alerts:
-            if len(chunk) + len(a) > 3800:
-                notify(chunk)
-                chunk = ""
-            chunk += a + "\n\n"
-        notify(chunk)
-    if cfg.get("status_message", True):
-        notify(format_status(cfg, searches, found, len(alerts), errors, next_run))
-    print(f"Done. {len(alerts)} alert(s).")
+        if alerts:
+            # Telegram messages are capped at 4096 chars, so send in chunks.
+            chunk = ""
+            for a in alerts:
+                if len(chunk) + len(a) > 3800:
+                    notify(chunk)
+                    chunk = ""
+                chunk += a + "\n\n"
+            notify(chunk)
+        if cfg.get("status_message", True):
+            label = f"{part}/{len(batches)}" if len(batches) > 1 else None
+            last = part == len(batches)
+            notify(format_status(cfg, batch, found, len(alerts), errors, next_run if last else None, label))
+        total_alerts += len(alerts)
+
+    print(f"Done. {total_alerts} alert(s).")
     return state
 
 
@@ -209,18 +220,26 @@ def format_status(
     alerts: int,
     errors: int,
     next_run: datetime | None,
+    part: str | None = None,
 ) -> str:
-    """Short summary sent after every run so you know the bot is alive."""
-    dates = ", ".join(f"{s.departure:%d %b}" for s in searches) or "none"
-    lines = [f"✅ <b>Flight bot ran</b> · <i>{escape(source_name(cfg))}</i>", f"Checked departures: {dates}"]
-    if found:
-        offer, search = min(found, key=lambda f: f[0].price)
-        lines.append(
-            f"Cheapest: <b>{offer.price} {offer.currency}</b> "
-            f"{offer.origin} → {offer.destination} on {search.departure:%d %b} ({escape(offer.airline)})"
-        )
-    else:
-        lines.append("No fares found.")
+    """Short summary sent after every run so you know the bot is alive,
+    with the cheapest fare found for each date checked."""
+    title = f"✅ <b>Flight bot ran</b> · <i>{escape(source_name(cfg))}</i>"
+    if part:
+        title += f" · part {part}"
+    lines = [title]
+    for search in searches:
+        fares = [o for o, s in found if s is search]
+        if fares:
+            o = min(fares, key=lambda o: o.price)
+            lines.append(
+                f"{search.departure:%a %d %b}: <b>{o.price} {o.currency}</b> {o.origin} → {o.destination}"
+                f" ({escape(o.airline)})"
+            )
+        else:
+            lines.append(f"{search.departure:%a %d %b}: no fares")
+    if not searches:
+        lines.append("No dates left to check.")
     lines.append(f"Alerts sent: {alerts}" + (f" · Failed searches: {errors}" if errors else ""))
     if next_run:
         tz = ZoneInfo(cfg.get("timezone", "Europe/Oslo"))

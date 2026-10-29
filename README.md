@@ -31,7 +31,7 @@ Each config has a `schedule` cron, and `.github/workflows/check-flights.yml` mus
 `max_searches_per_run` limits how many API calls/requests one run makes; dates are checked in rotation so all of them get covered over a few runs.
 
 - SerpApi: one search covers every airport for one date. 2 per run x 3 runs a day = ~186 searches/month.
-- fast-flights: one request per airport per date (9 per date here). 45 per run = 5 dates, so every date is checked about every 3 hours.
+- fast-flights: no limit set, so every date is checked on every run (one request per airport per date, 9 per date here). `dates_per_message: 5` sends one status message per 5 dates.
 
 ## Running locally
 
