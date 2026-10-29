@@ -6,8 +6,8 @@ Two bots run side by side from the same code and workflow, each with its own con
 
 | Bot | Config | Source | Schedule |
 |---|---|---|---|
-| SerpApi | `configs/serpapi.yaml` | [SerpApi Google Flights API](https://serpapi.com/google-flights-api) (official, free plan 250 searches/month) | every 8 hours |
-| fast-flights | `configs/fastflights.yaml` | [faster-flights](https://pypi.org/project/faster-flights/) library (unofficial scraper, no key, no quota, may break or get blocked) | every hour |
+| SerpApi | `configs/serpapi.yaml` | [SerpApi Google Flights API](https://serpapi.com/google-flights-api) (official, free plan 250 searches/month) | every 8 hours (00:17, 08:17, 16:17 UTC) |
+| fast-flights | `configs/fastflights.yaml` | [faster-flights](https://pypi.org/project/faster-flights/) library (unofficial scraper, no key, no quota, may break or get blocked) | every hour at :47 |
 
 Both send to the same Telegram chat; each message says which bot it came from.
 
@@ -22,9 +22,24 @@ Both send to the same Telegram chat; each message says which bot it came from.
    `SERPAPI_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
 4. Open *Actions → Check flights → Run workflow*, pick which bot to run (or `all`), and start it.
 
-## Changing a schedule
+## Scheduling (cron-job.org)
 
-Each config has a `schedule` cron, and `.github/workflows/check-flights.yml` must list the same cron under `on.schedule`. GitHub runs whichever configs match the cron that fired. Change both together (a test checks they match). Times are UTC.
+GitHub's built-in `schedule` trigger never fired for this repo, so runs are started by [cron-job.org](https://cron-job.org) (free), which calls GitHub's "Run workflow" API:
+
+- URL: `https://api.github.com/repos/Fogatt/flight-bot/actions/workflows/check-flights.yml/dispatches`
+- Method: `POST`
+- Headers: `Accept: application/vnd.github+json`, `Authorization: Bearer <token>`, `X-GitHub-Api-Version: 2022-11-28`, `Content-Type: application/json`
+- Body: `{"ref":"main","inputs":{"config":"fastflights"}}` (or `"serpapi"`)
+- A successful call returns HTTP `204`.
+
+The token is a GitHub fine-grained personal access token with access to this repo only and the **Actions: Read and write** permission.
+
+| Job | Body `config` | Schedule (UTC) |
+|---|---|---|
+| fast-flights | `fastflights` | every hour at :47 |
+| SerpApi | `serpapi` | 00:17, 08:17, 16:17 |
+
+Each config's `schedule` should match its timer; it's only used to show the next check time in the status message.
 
 ## Search quota
 

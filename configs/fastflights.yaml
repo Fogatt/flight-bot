@@ -2,7 +2,7 @@
 # but it can break when Google changes its pages or blocks requests.
 name: fast-flights
 provider: fastflights
-schedule: "47 * * * *"         # every hour (UTC); must match a cron in .github/workflows/check-flights.yml
+schedule: "47 * * * *"         # every hour (UTC); the cron-job.org timer must match (used for the "next check" time)
 state_file: state/fastflights.json
 
 search:

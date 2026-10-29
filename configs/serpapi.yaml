@@ -1,7 +1,7 @@
 # SerpApi: official Google Flights API, free plan = 250 searches/month.
 name: SerpApi
 provider: serpapi
-schedule: "17 */8 * * *"       # every 8 hours (UTC); must match a cron in .github/workflows/check-flights.yml
+schedule: "17 */8 * * *"       # every 8 hours (UTC); the cron-job.org timer must match (used for the "next check" time)
 state_file: state/serpapi.json
 
 search:

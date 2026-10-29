@@ -182,16 +182,20 @@ def test_describe_cron():
     assert describe_cron("0 9 * * 1-5") is None
 
 
-def test_every_config_schedule_has_a_workflow_cron():
+def test_configs_are_valid():
     import yaml
 
     root = Path(__file__).parent.parent
+    configs = {p.stem: yaml.safe_load(p.read_text()) for p in sorted((root / "configs").glob("*.yaml"))}
+    assert {c["provider"] for c in configs.values()} == {"serpapi", "fastflights"}
+    assert len({c["state_file"] for c in configs.values()}) == len(configs)  # separate state per bot
+    for c in configs.values():
+        assert next_cron_run(c["schedule"], datetime(2026, 10, 29, tzinfo=timezone.utc)) is not None
+
+    # The workflow's manual-run choices must match the config file names.
     workflow = yaml.safe_load((root / ".github/workflows/check-flights.yml").read_text())
-    crons = {c["cron"] for c in workflow[True]["schedule"]}  # PyYAML reads `on:` as True
-    configs = [yaml.safe_load(p.read_text()) for p in sorted((root / "configs").glob("*.yaml"))]
-    assert {c["provider"] for c in configs} == {"serpapi", "fastflights"}
-    assert {c["schedule"] for c in configs} == crons
-    assert len({c["state_file"] for c in configs}) == len(configs)  # separate state per bot
+    options = workflow[True]["workflow_dispatch"]["inputs"]["config"]["options"]  # PyYAML reads `on:` as True
+    assert set(options) == {"all", *configs}
 
 
 def test_parse_fastflights_result():

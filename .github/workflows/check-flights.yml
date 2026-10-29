@@ -1,11 +1,11 @@
 name: Check flights
 
 on:
-  schedule:
-    # Each cron runs the configs in configs/ whose `schedule` matches it exactly. 
-    - cron: "17 */8 * * *"   # SerpApi, every 8 hours (UTC)
-    - cron: "47 * * * *"     # fast-flights, every hour
-  workflow_dispatch:          # "Run workflow" button for manual runs
+  # GitHub's own `schedule` trigger never fired for this repo, so runs are started
+  # from outside by cron-job.org calling the workflow_dispatch API (see README):
+  #   fast-flights: every hour at :47 UTC     -> inputs.config = fastflights
+  #   SerpApi:      00:17, 08:17, 16:17 UTC   -> inputs.config = serpapi
+  workflow_dispatch:          # also the "Run workflow" button for manual runs
     inputs:
       config:
         description: Which bot to run
@@ -17,8 +17,8 @@ permissions:
   contents: write             # to commit state files back
 
 concurrency:
-  # One queue per schedule, so an hourly run never cancels a waiting 8-hourly one.
-  group: check-flights-${{ github.event.schedule || inputs.config }}
+  # One queue per bot, so an hourly run never cancels a waiting 8-hourly one.
+  group: check-flights-${{ inputs.config }}
   cancel-in-progress: false
 
 jobs:
@@ -45,12 +45,9 @@ jobs:
           DUFFEL_TOKEN: ${{ secrets.DUFFEL_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          SCHEDULE: ${{ github.event.schedule }}
           CONFIG: ${{ inputs.config }}
         run: |
-          if [ -n "$SCHEDULE" ]; then
-            python -m flight_bot.bot --schedule "$SCHEDULE"
-          elif [ -n "$CONFIG" ] && [ "$CONFIG" != "all" ]; then
+          if [ -n "$CONFIG" ] && [ "$CONFIG" != "all" ]; then
             python -m flight_bot.bot --config "configs/$CONFIG.yaml"
           else
             python -m flight_bot.bot
