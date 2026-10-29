@@ -3,7 +3,7 @@ name: Check flights
 on:
   # GitHub's own `schedule` trigger never fired for this repo, so runs are started
   # from outside by cron-job.org calling the workflow_dispatch API (see README):
-  #   fast-flights: every hour at :47 UTC     -> inputs.config = fastflights
+  #   fast-flights: every hour, on the hour   -> inputs.config = fastflights
   #   SerpApi:      00:17, 08:17, 16:17 UTC   -> inputs.config = serpapi
   workflow_dispatch:          # also the "Run workflow" button for manual runs
     inputs:

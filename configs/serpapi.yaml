@@ -1,44 +1,17 @@
 # SerpApi: official Google Flights API, free plan = 250 searches/month.
+# Airports, dates and price limit come from trip.yaml.
 name: SerpApi
 provider: serpapi
-schedule: "17 */8 * * *"       # every 8 hours (UTC); the cron-job.org timer must match (used for the "next check" time)
+# When the cron-job.org timer runs this bot (cron syntax, UTC). Only used to show
+# the next check time in Telegram, so keep it in sync with the timer.
+schedule: "17 */8 * * *"       # 00:17, 08:17, 16:17 UTC
 state_file: state/serpapi.json
 
 search:
-  origins: [BGO]               # Bergen
-  destinations:
-    - GRU                      # São Paulo Guarulhos
-    - GIG                      # Rio de Janeiro Galeão
-    - VCP                      # Campinas Viracopos
-    - FOR                      # Fortaleza
-    - REC                      # Recife
-    - SSA                      # Salvador
-    - BSB                      # Brasília
-    - CNF                      # Belo Horizonte Confins
-    - POA                      # Porto Alegre
-  departure_dates:             # either a range...
-    from: 2026-12-10
-    to: 2026-12-22
-  # ...or an explicit list:
-  # departure_dates: [2026-12-15, 2026-12-18]
-
-  # Round trip: return N days after departure. Can be a list, e.g. [14, 21].
-  # Leave unset (or null) for one-way.
-  return_after_days: null
-
-  adults: 1
-  cabin_class: economy         # economy | premium_economy | business | first
-  max_connections: 1           # 0 = direct only
-
   # API calls per run. With SerpApi one call covers all airports for one date.
   # 3 runs/day x 2 = ~186/month, leaving room for manual runs.
   # Dates are checked in rotation, so each date is checked about every 2 days.
   max_searches_per_run: 2
 
-alert:
-  currency: NOK
-  max_price: 8000              # alert when the cheapest fare is at or below this
-
 # Send a short "bot ran" summary to Telegram after every run, with the time of the next check.
 status_message: true
-timezone: Europe/Oslo

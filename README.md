@@ -2,12 +2,14 @@
 
 Checks Google Flights for fares from your origin airports to all your destination airports, and sends a Telegram message when the cheapest fare to an airport on a date is at or below your limit. You're only alerted again for the same route and date if the price drops further.
 
-Two bots run side by side from the same code and workflow, each with its own config in `configs/` and its own saved state in `state/`:
+**Edit your trip in `trip.yaml`** (airports, departure dates, passengers, price limit). Both bots use it.
+
+Two bots run side by side from the same code and workflow, each with its own settings in `configs/` (source, schedule, quota) and its own saved state in `state/`:
 
 | Bot | Config | Source | Schedule |
 |---|---|---|---|
 | SerpApi | `configs/serpapi.yaml` | [SerpApi Google Flights API](https://serpapi.com/google-flights-api) (official, free plan 250 searches/month) | every 8 hours (00:17, 08:17, 16:17 UTC) |
-| fast-flights | `configs/fastflights.yaml` | [faster-flights](https://pypi.org/project/faster-flights/) library (unofficial scraper, no key, no quota, may break or get blocked) | every hour at :47 |
+| fast-flights | `configs/fastflights.yaml` | [faster-flights](https://pypi.org/project/faster-flights/) library (unofficial scraper, no key, no quota, may break or get blocked) | every hour, on the hour |
 
 Both send to the same Telegram chat; each message says which bot it came from.
 
@@ -36,10 +38,10 @@ The token is a GitHub fine-grained personal access token with access to this rep
 
 | Job | Body `config` | Schedule (UTC) |
 |---|---|---|
-| fast-flights | `fastflights` | every hour at :47 |
+| fast-flights | `fastflights` | every hour, on the hour |
 | SerpApi | `serpapi` | 00:17, 08:17, 16:17 |
 
-Each config's `schedule` should match its timer; it's only used to show the next check time in the status message.
+Each bot config's `schedule` (cron syntax, UTC) should match its timer; it's only used to show the next check time in the status message.
 
 ## Search quota
 

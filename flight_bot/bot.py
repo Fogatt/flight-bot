@@ -38,9 +38,25 @@ def route_label(offer: Offer, search: Search) -> str:
     return text
 
 
-def load_config(path: Path) -> dict:
-    with open(path) as f:
-        return yaml.safe_load(f)
+SHARED_CONFIG = Path("trip.yaml")
+
+
+def load_config(path: Path, shared: Path = SHARED_CONFIG) -> dict:
+    """A bot's config layered on top of the shared trip settings."""
+    cfg = yaml.safe_load(path.read_text()) or {}
+    if shared.exists():
+        cfg = deep_merge(yaml.safe_load(shared.read_text()) or {}, cfg)
+    return cfg
+
+
+def deep_merge(base: dict, override: dict) -> dict:
+    merged = dict(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
 
 
 def to_date(value) -> date:

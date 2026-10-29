@@ -5,6 +5,7 @@ from decimal import Decimal
 from flight_bot.bot import (
     build_searches,
     describe_cron,
+    load_config,
     next_cron_run,
     pick_searches,
     run,
@@ -186,11 +187,16 @@ def test_configs_are_valid():
     import yaml
 
     root = Path(__file__).parent.parent
-    configs = {p.stem: yaml.safe_load(p.read_text()) for p in sorted((root / "configs").glob("*.yaml"))}
+    configs = {p.stem: load_config(p, root / "trip.yaml") for p in sorted((root / "configs").glob("*.yaml"))}
     assert {c["provider"] for c in configs.values()} == {"serpapi", "fastflights"}
     assert len({c["state_file"] for c in configs.values()}) == len(configs)  # separate state per bot
     for c in configs.values():
         assert next_cron_run(c["schedule"], datetime(2026, 10, 29, tzinfo=timezone.utc)) is not None
+        # Trip settings come from trip.yaml and are the same for every bot.
+        assert c["search"]["origins"] == ["BGO"] and len(c["search"]["destinations"]) == 9
+        assert c["alert"]["max_price"] == 8000
+    assert configs["serpapi"]["search"]["max_searches_per_run"] == 2
+    assert "max_searches_per_run" not in configs["fastflights"]["search"]
 
     # The workflow's manual-run choices must match the config file names.
     workflow = yaml.safe_load((root / ".github/workflows/check-flights.yml").read_text())
@@ -238,3 +244,10 @@ def test_dates_per_message_splits_status_into_parts():
     assert ["Next check" in m for m in status] == [False, False, True]
     # Each part's alerts are sent just before its status message.
     assert [m.count("✈️") for m in sent if "✈️" in m] == [5, 5, 2]
+
+
+def test_bot_config_overrides_shared_trip(tmp_path):
+    (tmp_path / "trip.yaml").write_text("search: {origins: [BGO], adults: 1}\nalert: {max_price: 8000}\n")
+    (tmp_path / "bot.yaml").write_text("search: {adults: 2}\nname: x\n")
+    cfg = load_config(tmp_path / "bot.yaml", tmp_path / "trip.yaml")
+    assert cfg == {"search": {"origins": ["BGO"], "adults": 2}, "alert": {"max_price": 8000}, "name": "x"}
