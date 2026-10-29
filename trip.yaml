@@ -24,7 +24,7 @@ search:
 
   adults: 1
   cabin_class: economy         # economy | premium_economy | business | first
-  max_connections: 1           # 0 = direct only
+  max_connections: 2           # 0 = direct only
 
 alert:
   currency: NOK
