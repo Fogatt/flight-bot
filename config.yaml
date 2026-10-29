@@ -36,3 +36,7 @@ search:
 alert:
   currency: NOK                # SerpApi returns all prices in this currency
   max_price: 8000              # alert when the cheapest fare is at or below this
+
+# Send a short "bot ran" summary to Telegram after every run, with the time of the next check.
+status_message: true
+timezone: Europe/Oslo          # for the next-check time in the status message

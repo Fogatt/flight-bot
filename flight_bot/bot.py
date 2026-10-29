@@ -8,10 +8,11 @@ import os
 import sys
 import time
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from html import escape
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import yaml
 
@@ -123,7 +124,9 @@ def format_alert(offer: Offer, search: Search, prev: dict | None) -> str:
     return "\n".join(lines)
 
 
-def run(cfg: dict, client, state: dict, today: date, notify, pause: float = 1.0) -> dict:
+def run(
+    cfg: dict, client, state: dict, today: date, notify, pause: float = 1.0, next_run: datetime | None = None
+) -> dict:
     search_cfg, alert_cfg = cfg["search"], cfg["alert"]
     origins = [a.upper() for a in search_cfg["origins"]]
     destinations = [a.upper() for a in search_cfg["destinations"]]
@@ -136,6 +139,8 @@ def run(cfg: dict, client, state: dict, today: date, notify, pause: float = 1.0)
 
     routes = state.setdefault("routes", {})
     alerts = []
+    found: list[tuple[Offer, Search]] = []
+    errors = 0
     for i, search in enumerate(searches):
         if i:
             time.sleep(pause)
@@ -151,6 +156,7 @@ def run(cfg: dict, client, state: dict, today: date, notify, pause: float = 1.0)
             )
         except (ProviderError, OSError) as e:
             print(f"  {search.departure}: error: {e}", file=sys.stderr)
+            errors += 1
             continue
 
         # Cheapest offer per origin/destination pair.
@@ -163,6 +169,7 @@ def run(cfg: dict, client, state: dict, today: date, notify, pause: float = 1.0)
             print(f"  {search.departure}: no offers")
 
         for offer in sorted(cheapest.values(), key=lambda o: o.price):
+            found.append((offer, search))
             key = route_key(offer, search)
             prev = routes.get(key)
             print(f"  {key}: {offer.price} {offer.currency} ({offer.airline})")
@@ -189,8 +196,71 @@ def run(cfg: dict, client, state: dict, today: date, notify, pause: float = 1.0)
                 chunk = ""
             chunk += a + "\n\n"
         notify(chunk)
+    if cfg.get("status_message", True):
+        notify(format_status(cfg, searches, found, len(alerts), errors, next_run))
     print(f"Done. {len(alerts)} alert(s).")
     return state
+
+
+def format_status(
+    cfg: dict,
+    searches: list[Search],
+    found: list[tuple[Offer, Search]],
+    alerts: int,
+    errors: int,
+    next_run: datetime | None,
+) -> str:
+    """Short summary sent after every run so you know the bot is alive."""
+    dates = ", ".join(f"{s.departure:%d %b}" for s in searches) or "none"
+    lines = ["✅ <b>Flight bot ran</b>", f"Checked departures: {dates}"]
+    if found:
+        offer, search = min(found, key=lambda f: f[0].price)
+        lines.append(
+            f"Cheapest: <b>{offer.price} {offer.currency}</b> "
+            f"{offer.origin} → {offer.destination} on {search.departure:%d %b} ({escape(offer.airline)})"
+        )
+    else:
+        lines.append("No fares found.")
+    lines.append(f"Alerts sent: {alerts}" + (f" · Failed searches: {errors}" if errors else ""))
+    if next_run:
+        tz = ZoneInfo(cfg.get("timezone", "Europe/Oslo"))
+        hours = (next_run - datetime.now(timezone.utc)).total_seconds() / 3600
+        lines.append(f"Next check in ~{hours:.0f} h, around {next_run.astimezone(tz):%a %d %b %H:%M}")
+    return "\n".join(lines)
+
+
+def next_cron_run(cron: str, now: datetime) -> datetime | None:
+    """Next UTC time for a simple cron like "17 */8 * * *" (fixed minute; hour as *, */N, N or N,M).
+    Returns None for anything more complex."""
+    fields = cron.split()
+    if len(fields) != 5 or fields[2:] != ["*", "*", "*"] or not fields[0].isdigit():
+        return None
+    minute, hour_field = int(fields[0]), fields[1]
+    if hour_field == "*":
+        hours = set(range(24))
+    elif hour_field.startswith("*/") and hour_field[2:].isdigit():
+        hours = set(range(0, 24, int(hour_field[2:])))
+    elif all(h.isdigit() for h in hour_field.split(",")):
+        hours = {int(h) for h in hour_field.split(",")}
+    else:
+        return None
+    t = now.astimezone(timezone.utc).replace(minute=minute, second=0, microsecond=0)
+    for _ in range(48):
+        if t > now and t.hour in hours:
+            return t
+        t += timedelta(hours=1)
+    return None
+
+
+def scheduled_cron(workflow: Path) -> str | None:
+    try:
+        triggers = yaml.safe_load(workflow.read_text())
+    except (OSError, yaml.YAMLError):
+        return None
+    # PyYAML reads the bare key `on:` as boolean True.
+    on = triggers.get("on", triggers.get(True)) or {}
+    schedule = on.get("schedule") if isinstance(on, dict) else None
+    return schedule[0].get("cron") if schedule else None
 
 
 def make_client(cfg: dict):
@@ -223,7 +293,10 @@ def main() -> None:
         token, chat_id = os.environ["TELEGRAM_BOT_TOKEN"], os.environ["TELEGRAM_CHAT_ID"]
         notify = lambda text: send_message(token, chat_id, text)
 
-    state = run(cfg, client, load_state(args.state), today, notify)
+    cron = scheduled_cron(Path(".github/workflows/check-flights.yml"))
+    next_run = next_cron_run(cron, datetime.now(timezone.utc)) if cron else None
+
+    state = run(cfg, client, load_state(args.state), today, notify, next_run=next_run)
     if not args.dry_run:
         save_state(args.state, state, today)
 

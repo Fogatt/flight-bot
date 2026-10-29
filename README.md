@@ -29,5 +29,6 @@ python -m flight_bot.bot --dry-run   # prints alerts, sends nothing, saves no st
 
 ## Notes
 
+- After every run the bot sends a short status message (dates checked, cheapest fare, time of the next check). Set `status_message: false` in `config.yaml` to turn it off.
 - `state.json` remembers the latest, best and last-alerted price for each route, plus which date to check next. The workflow commits it back to the repo after each run.
 - A [Duffel](https://duffel.com) provider is also included (`provider: duffel`, secret `DUFFEL_TOKEN`), but Duffel only gives live tokens to verified businesses.

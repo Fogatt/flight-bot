@@ -1,7 +1,16 @@
-from datetime import date
+from datetime import date, datetime, timezone
+from pathlib import Path
 from decimal import Decimal
 
-from flight_bot.bot import build_searches, pick_searches, run, save_state, should_alert
+from flight_bot.bot import (
+    build_searches,
+    next_cron_run,
+    pick_searches,
+    run,
+    save_state,
+    scheduled_cron,
+    should_alert,
+)
 from flight_bot.duffel import parse_offer
 from flight_bot.offers import Offer
 from flight_bot.serpapi import parse_option
@@ -13,6 +22,7 @@ CFG = {
         "departure_dates": {"from": "2026-12-15", "to": "2026-12-16"},
     },
     "alert": {"max_price": 8000, "currency": "NOK"},
+    "status_message": False,
 }
 TODAY = date(2026, 10, 29)
 
@@ -141,3 +151,31 @@ def test_run_alerts_cheapest_once_then_only_on_drop(tmp_path):
 
     save_state(tmp_path / "s.json", state, date(2026, 12, 15))
     assert "BGO-GRU-2026-12-15-oneway" not in (tmp_path / "s.json").read_text()
+
+
+def test_status_message_after_run():
+    sent = []
+    cfg = dict(CFG, status_message=True)
+    client = FakeClient({"GRU": ["9100"], "GIG": ["8700"]})
+    next_run = datetime(2026, 10, 29, 16, 17, tzinfo=timezone.utc)
+    run(cfg, client, {}, TODAY, sent.append, pause=0, next_run=next_run)
+    assert len(sent) == 1  # no fare under the limit, so only the status message
+    assert "Flight bot ran" in sent[0]
+    assert "Checked departures: 15 Dec, 16 Dec" in sent[0]
+    assert "<b>8700 NOK</b> BGO → GIG on 15 Dec" in sent[0]
+    assert "Thu 29 Oct 17:17" in sent[0]  # Oslo time (UTC+1)
+
+
+def test_next_cron_run():
+    now = datetime(2026, 10, 29, 9, 30, tzinfo=timezone.utc)
+    assert next_cron_run("17 */8 * * *", now) == datetime(2026, 10, 29, 16, 17, tzinfo=timezone.utc)
+    assert next_cron_run("17 */8 * * *", datetime(2026, 10, 29, 16, 20, tzinfo=timezone.utc)) == datetime(
+        2026, 10, 30, 0, 17, tzinfo=timezone.utc
+    )
+    assert next_cron_run("0 6,18 * * *", now) == datetime(2026, 10, 29, 18, 0, tzinfo=timezone.utc)
+    assert next_cron_run("0 9 * * 1-5", now) is None
+
+
+def test_scheduled_cron_reads_workflow():
+    workflow = Path(__file__).parent.parent / ".github/workflows/check-flights.yml"
+    assert scheduled_cron(workflow) == "17 */8 * * *"
