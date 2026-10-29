@@ -245,8 +245,24 @@ def format_status(
         tz = ZoneInfo(cfg.get("timezone", "Europe/Oslo"))
         minutes = (next_run - datetime.now(timezone.utc)).total_seconds() / 60
         wait = f"{minutes:.0f} min" if minutes < 120 else f"{minutes / 60:.0f} h"
-        lines.append(f"Next check in ~{wait}, around {next_run.astimezone(tz):%a %d %b %H:%M}")
+        line = f"Next check: {next_run.astimezone(tz):%a %d %b %H:%M} (in ~{wait})"
+        every = describe_cron(cfg.get("schedule", ""))
+        if every:
+            line += f" · runs {every}"
+        lines.append(line)
     return "\n".join(lines)
+
+
+def describe_cron(cron: str) -> str | None:
+    """"every hour" / "every 8 hours" for the simple crons next_cron_run understands."""
+    fields = cron.split()
+    if len(fields) != 5 or fields[2:] != ["*", "*", "*"]:
+        return None
+    if fields[1] == "*":
+        return "every hour"
+    if fields[1].startswith("*/") and fields[1][2:].isdigit():
+        return f"every {fields[1][2:]} hours"
+    return None
 
 
 def next_cron_run(cron: str, now: datetime) -> datetime | None:

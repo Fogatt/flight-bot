@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from flight_bot.bot import (
     build_searches,
+    describe_cron,
     next_cron_run,
     pick_searches,
     run,
@@ -162,7 +163,7 @@ def test_status_message_after_run():
     assert "Flight bot ran</b> · <i>fast-flights</i>" in sent[0]
     assert "Tue 15 Dec: <b>8700 NOK</b> BGO → GIG (Test Air)" in sent[0]
     assert "Wed 16 Dec: <b>8700 NOK</b> BGO → GIG" in sent[0]
-    assert "Thu 29 Oct 17:17" in sent[0]  # Oslo time (UTC+1)
+    assert "Next check: Thu 29 Oct 17:17" in sent[0]  # Oslo time (UTC+1)
 
 
 def test_next_cron_run():
@@ -173,6 +174,12 @@ def test_next_cron_run():
     )
     assert next_cron_run("0 6,18 * * *", now) == datetime(2026, 10, 29, 18, 0, tzinfo=timezone.utc)
     assert next_cron_run("0 9 * * 1-5", now) is None
+
+
+def test_describe_cron():
+    assert describe_cron("47 * * * *") == "every hour"
+    assert describe_cron("17 */8 * * *") == "every 8 hours"
+    assert describe_cron("0 9 * * 1-5") is None
 
 
 def test_every_config_schedule_has_a_workflow_cron():
