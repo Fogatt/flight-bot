@@ -77,13 +77,13 @@
       "best_price": "9979",
       "currency": "NOK",
       "departure": "2026-12-11",
-      "latest_price": "11654"
+      "latest_price": "12571"
     },
     "BGO-GRU-2026-12-12-oneway": {
       "best_price": "9663",
       "currency": "NOK",
       "departure": "2026-12-12",
-      "latest_price": "10516"
+      "latest_price": "10628"
     },
     "BGO-GRU-2026-12-13-oneway": {
       "best_price": "9965",
@@ -107,7 +107,7 @@
       "best_price": "11629",
       "currency": "NOK",
       "departure": "2026-12-16",
-      "latest_price": "12877"
+      "latest_price": "13013"
     },
     "BGO-GRU-2026-12-17-oneway": {
       "best_price": "13734",
@@ -119,7 +119,7 @@
       "best_price": "15980",
       "currency": "NOK",
       "departure": "2026-12-18",
-      "latest_price": "17589"
+      "latest_price": "19109"
     },
     "BGO-GRU-2026-12-19-oneway": {
       "best_price": "13920",
@@ -137,7 +137,7 @@
       "best_price": "12474",
       "currency": "NOK",
       "departure": "2026-12-21",
-      "latest_price": "14007"
+      "latest_price": "13159"
     },
     "BGO-GRU-2026-12-22-oneway": {
       "best_price": "11629",
