@@ -119,13 +119,13 @@
       "best_price": "13734",
       "currency": "NOK",
       "departure": "2026-12-17",
-      "latest_price": "15221"
+      "latest_price": "15157"
     },
     "BGO-GRU-2026-12-18-oneway": {
       "best_price": "15980",
       "currency": "NOK",
       "departure": "2026-12-18",
-      "latest_price": "19109"
+      "latest_price": "17514"
     },
     "BGO-GRU-2026-12-19-oneway": {
       "best_price": "13920",
@@ -134,10 +134,10 @@
       "latest_price": "16922"
     },
     "BGO-GRU-2026-12-20-oneway": {
-      "best_price": "12822",
+      "best_price": "12812",
       "currency": "NOK",
       "departure": "2026-12-20",
-      "latest_price": "12822"
+      "latest_price": "12812"
     },
     "BGO-GRU-2026-12-21-oneway": {
       "best_price": "12474",
@@ -164,10 +164,10 @@
       "latest_price": "15714"
     },
     "BGO-VCP-2026-12-12-oneway": {
-      "best_price": "40550",
+      "best_price": "40534",
       "currency": "NOK",
       "departure": "2026-12-12",
-      "latest_price": "40550"
+      "latest_price": "40534"
     },
     "BGO-VCP-2026-12-13-oneway": {
       "best_price": "14075",
@@ -191,25 +191,25 @@
       "best_price": "19164",
       "currency": "NOK",
       "departure": "2026-12-16",
-      "latest_price": "19174"
+      "latest_price": "19164"
     },
     "BGO-VCP-2026-12-17-oneway": {
       "best_price": "23149",
       "currency": "NOK",
       "departure": "2026-12-17",
-      "latest_price": "23159"
+      "latest_price": "23149"
     },
     "BGO-VCP-2026-12-18-oneway": {
       "best_price": "23149",
       "currency": "NOK",
       "departure": "2026-12-18",
-      "latest_price": "23159"
+      "latest_price": "23149"
     },
     "BGO-VCP-2026-12-19-oneway": {
-      "best_price": "28371",
+      "best_price": "28355",
       "currency": "NOK",
       "departure": "2026-12-19",
-      "latest_price": "40550"
+      "latest_price": "28355"
     },
     "BGO-VCP-2026-12-20-oneway": {
       "best_price": "19164",
@@ -227,7 +227,7 @@
       "best_price": "19164",
       "currency": "NOK",
       "departure": "2026-12-22",
-      "latest_price": "19174"
+      "latest_price": "19164"
     }
   }
 }
