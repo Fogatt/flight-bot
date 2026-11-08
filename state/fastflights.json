@@ -41,7 +41,7 @@
       "best_price": "12899",
       "currency": "NOK",
       "departure": "2026-12-16",
-      "latest_price": "14339"
+      "latest_price": "12904"
     },
     "BGO-GIG-2026-12-17-oneway": {
       "best_price": "12884",
@@ -233,7 +233,7 @@
       "best_price": "17196",
       "currency": "NOK",
       "departure": "2026-12-22",
-      "latest_price": "17206"
+      "latest_price": "19195"
     }
   }
 }
