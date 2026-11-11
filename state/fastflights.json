@@ -11,13 +11,13 @@
       "best_price": "10130",
       "currency": "NOK",
       "departure": "2026-12-11",
-      "latest_price": "11058"
+      "latest_price": "11056"
     },
     "BGO-GIG-2026-12-12-oneway": {
       "best_price": "10102",
       "currency": "NOK",
       "departure": "2026-12-12",
-      "latest_price": "11151"
+      "latest_price": "11148"
     },
     "BGO-GIG-2026-12-13-oneway": {
       "best_price": "9872",
@@ -29,13 +29,13 @@
       "best_price": "9209",
       "currency": "NOK",
       "departure": "2026-12-14",
-      "latest_price": "9261"
+      "latest_price": "9257"
     },
     "BGO-GIG-2026-12-15-oneway": {
       "best_price": "9708",
       "currency": "NOK",
       "departure": "2026-12-15",
-      "latest_price": "11361"
+      "latest_price": "11357"
     },
     "BGO-GIG-2026-12-16-oneway": {
       "best_price": "12899",
@@ -59,7 +59,7 @@
       "best_price": "14314",
       "currency": "NOK",
       "departure": "2026-12-19",
-      "latest_price": "16843"
+      "latest_price": "16841"
     },
     "BGO-GIG-2026-12-20-oneway": {
       "best_price": "13924",
@@ -83,7 +83,7 @@
       "best_price": "8900",
       "currency": "NOK",
       "departure": "2026-12-10",
-      "latest_price": "9773"
+      "latest_price": "9771"
     },
     "BGO-GRU-2026-12-11-oneway": {
       "best_price": "9979",
@@ -95,7 +95,7 @@
       "best_price": "9179",
       "currency": "NOK",
       "departure": "2026-12-12",
-      "latest_price": "9222"
+      "latest_price": "9220"
     },
     "BGO-GRU-2026-12-13-oneway": {
       "best_price": "9163",
@@ -149,7 +149,7 @@
       "best_price": "11169",
       "currency": "NOK",
       "departure": "2026-12-21",
-      "latest_price": "11200"
+      "latest_price": "11198"
     },
     "BGO-GRU-2026-12-22-oneway": {
       "best_price": "9680",
@@ -161,13 +161,13 @@
       "best_price": "10419",
       "currency": "NOK",
       "departure": "2026-12-10",
-      "latest_price": "15569"
+      "latest_price": "15566"
     },
     "BGO-VCP-2026-12-11-oneway": {
       "best_price": "15516",
       "currency": "NOK",
       "departure": "2026-12-11",
-      "latest_price": "15569"
+      "latest_price": "15566"
     },
     "BGO-VCP-2026-12-12-oneway": {
       "best_price": "14461",
@@ -179,55 +179,55 @@
       "best_price": "12099",
       "currency": "NOK",
       "departure": "2026-12-13",
-      "latest_price": "13323"
+      "latest_price": "13320"
     },
     "BGO-VCP-2026-12-14-oneway": {
       "best_price": "15516",
       "currency": "NOK",
       "departure": "2026-12-14",
-      "latest_price": "15569"
+      "latest_price": "15566"
     },
     "BGO-VCP-2026-12-15-oneway": {
       "best_price": "16308",
       "currency": "NOK",
       "departure": "2026-12-15",
-      "latest_price": "28043"
+      "latest_price": "16358"
     },
     "BGO-VCP-2026-12-16-oneway": {
       "best_price": "19164",
       "currency": "NOK",
       "departure": "2026-12-16",
-      "latest_price": "19217"
+      "latest_price": "19214"
     },
     "BGO-VCP-2026-12-17-oneway": {
-      "best_price": "23149",
+      "best_price": "17236",
       "currency": "NOK",
       "departure": "2026-12-17",
-      "latest_price": "140449"
+      "latest_price": "17236"
     },
     "BGO-VCP-2026-12-18-oneway": {
       "best_price": "23149",
       "currency": "NOK",
       "departure": "2026-12-18",
-      "latest_price": "23202"
+      "latest_price": "23199"
     },
     "BGO-VCP-2026-12-19-oneway": {
-      "best_price": "28355",
+      "best_price": "21436",
       "currency": "NOK",
       "departure": "2026-12-19",
-      "latest_price": "40585"
+      "latest_price": "21436"
     },
     "BGO-VCP-2026-12-20-oneway": {
       "best_price": "19164",
       "currency": "NOK",
       "departure": "2026-12-20",
-      "latest_price": "19217"
+      "latest_price": "23199"
     },
     "BGO-VCP-2026-12-21-oneway": {
       "best_price": "19164",
       "currency": "NOK",
       "departure": "2026-12-21",
-      "latest_price": "19217"
+      "latest_price": "23199"
     },
     "BGO-VCP-2026-12-22-oneway": {
       "best_price": "17196",
